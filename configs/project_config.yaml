@@ -1,0 +1,17 @@
+project:
+  name: ClimateTwin
+  version: 0.1
+
+region:
+  mode: state
+  default: Uttar Pradesh
+
+forecast:
+  days: 7
+
+data:
+  raw_path: data/raw
+  processed_path: data/processed
+
+model:
+  baseline: lstm
