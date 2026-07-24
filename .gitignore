@@ -1,0 +1,18 @@
+# Climate datasets
+data/raw/
+data/processed/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Virtual environment
+.venv/
+venv/
+
+# Documentation and reports
+*.md
+*.pdf
