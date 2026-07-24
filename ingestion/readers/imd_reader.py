@@ -1,15 +1,17 @@
 """
-IMD GRD Reader -
-Reads IMD gridded rainfall binary (.grd) files and converts
-them into standard Python numerical arrays.
+IMD GRD Reader
+
+Reads IMD gridded binary (.grd) files and converts them
+into NumPy arrays.
 
 Responsibilities:
-- Read binary rainfall files
-- Handle IMD-specific format
+- Read binary GRD files
+- Use metadata supplied by CTLParser
 - Replace missing values
 - Return NumPy arrays
 
 Does NOT:
+- Parse CTL files
 - Perform preprocessing
 - Train models
 - Create visualizations
@@ -19,37 +21,58 @@ Does NOT:
 from pathlib import Path
 import numpy as np
 
-GRID_WIDTH = 135
-GRID_HEIGHT = 129
-MISSING_VALUE = -999.0
 
 class IMDReader:
-    """Reads IMD rainfall GRD files."""
+    """Reads IMD GRD files using parsed CTL metadata."""
+
     def __init__(self):
         pass
 
-    def read(self, file_path):
+    def read(self, file_path, metadata):
+        """
+        Read an IMD .grd file.
+
+        Parameters
+        ----------
+        file_path : str | Path
+            Path to the .grd file.
+
+        metadata : dict
+            Metadata returned by CTLParser.
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of shape (days, height, width)
+        """
+
         file_path = Path(file_path)
+
         if not file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
-        if file_path.suffix != ".grd":
+        if file_path.suffix.lower() != ".grd":
             raise ValueError("Expected a .grd file")
 
-        with open(file_path, "rb") as f:
-            data = np.fromfile(f, dtype=np.float32)
+        width = metadata["xdef"]["count"]
+        height = metadata["ydef"]["count"]
+        missing_value = metadata["missing_value"]
 
-        values_per_day = GRID_WIDTH * GRID_HEIGHT
+        with file_path.open("rb") as file:
+            data = np.fromfile(file, dtype=np.float32)
+
+        values_per_day = width * height
+
+        if data.size % values_per_day != 0:
+            raise ValueError(
+                f"Data size ({data.size}) is not divisible by "
+                f"grid size ({values_per_day})."
+            )
+
         num_days = data.size // values_per_day
 
-        # Verify axis order using IMD documentation
-        if data.size % values_per_day != 0:
-            raise ValueError(f"Data size {data.size} is not a multiple of {values_per_day}.")
+        rainfall = data.reshape(num_days, height, width)
 
-        # Reshape the data into the grid dimensions
-        rainfall = data.reshape(num_days, GRID_HEIGHT, GRID_WIDTH)
-        
-        # Replace missing values
-        rainfall[rainfall == MISSING_VALUE] = np.nan
-        
+        rainfall[rainfall == missing_value] = np.nan
+
         return rainfall
