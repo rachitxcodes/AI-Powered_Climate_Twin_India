@@ -34,3 +34,35 @@ DATASETS = {
         "storage": "data/raw/insat"
     }
 }
+
+from pathlib import Path
+
+from ingestion.dataset_config import DatasetConfig
+from ingestion.readers.imd_reader import IMDReader
+
+class DatasetRegistry:
+    """
+    Stores configuration for all supported datasets.
+    """
+    def __init__(self):
+        self._datasets = {
+            "rainfall": DatasetConfig(
+
+                name="rainfall",
+
+                base_directory=Path("data/raw/imd"),
+
+                ctl_file=Path("data/raw/imd/rainfall.ctl"),
+
+                file_pattern="Rainfall_ind{year}_rfp25.grd",
+
+                reader=IMDReader
+            )
+        }   
+
+    def get(self, dataset_name: str) -> DatasetConfig:
+        if dataset_name not in self._datasets:
+            raise ValueError(f"Unsupported dataset: {dataset_name}")
+
+        return self._datasets[dataset_name]
+   
