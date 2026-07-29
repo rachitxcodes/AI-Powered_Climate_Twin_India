@@ -12,7 +12,7 @@ class PreprocessingResult:
     """
 
     data: np.ndarray
-
+    
     statistics: StatisticsReport
 
     validation: ValidationReport
