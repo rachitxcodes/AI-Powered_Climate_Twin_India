@@ -5,6 +5,8 @@ from __future__ import annotations
 import pandas as pd
 
 from features.config import FeatureEngineeringConfig
+from features.generators import temporal_generator
+from features.generators.temporal_generator import TemporalGenerator
 from features.result import FeatureEngineeringResult
 
 
@@ -37,6 +39,11 @@ class FeatureEngineeringPipeline:
         #
         # if self.config.enable_temporal_features:
         #     ...
+        if self.config.enable_temporal_features:
+            df = temporal_generator.generate(df)
+            generated_features.extend(
+                ["year", "month", "day", "day_of_year"]
+            )
         #
         # if self.config.enable_lag_features:
         #     ...
