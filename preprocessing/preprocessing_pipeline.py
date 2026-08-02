@@ -34,4 +34,5 @@ class PreprocessingPipeline:
             metadata=loaded_dataset.metadata,
             statistics=statistics,
             validation=validation,
+            year=loaded_dataset.year
         )

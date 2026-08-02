@@ -1,15 +1,49 @@
 from ingestion.data_loader import DataLoader
 from preprocessing.preprocessing_pipeline import PreprocessingPipeline
+from features.config import FeatureEngineeringConfig
+from features.pipeline import FeatureEngineeringPipeline
+from features.builders.spatial_dataframe_builder import SpatialDataFrameBuilder
 from pprint import pprint
 
 
 loader = DataLoader()
-
 data = loader.load("rainfall", 2025)
-
 pipeline = PreprocessingPipeline()
-
 result = pipeline.run(data)
+
+print(result.data.shape)
+
+
+# feature_pipeline = FeatureEngineeringPipeline(
+#     FeatureEngineeringConfig()
+# )
+# feature_result = feature_pipeline.run(result)
+
+
+builder = SpatialDataFrameBuilder()
+
+latitudes, longitudes = builder.build(
+    data=result.data,
+    metadata=result.metadata,
+    year=result.year,
+)
+
+print("\nSpatial Coordinates")
+print("---------------------------")
+
+print("First 5 Latitudes :")
+print(latitudes[:5])
+
+print()
+
+print("First 5 Longitudes :")
+print(longitudes[:5])
+
+print()
+
+print("Latitude Count :", len(latitudes))
+print("Longitude Count:", len(longitudes))
+
 
 print("\nMetadata")
 pprint(result.metadata)
@@ -38,3 +72,7 @@ print(f"  Warnings: {validation.warnings if validation.warnings else 'None'}")
 
 print("Processed Data")
 print(f"  Shape   : {result.data.shape}")
+# print("\nEngineered Data")
+# print(feature_result.engineered_data.head())
+# print("\nGenerated Features")
+# print(feature_result.generated_features)

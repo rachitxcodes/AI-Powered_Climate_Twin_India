@@ -13,3 +13,5 @@ class LoadedDataset:
     data: np.ndarray
 
     metadata: dict
+
+    year: int

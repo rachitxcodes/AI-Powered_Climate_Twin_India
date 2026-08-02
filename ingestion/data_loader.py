@@ -31,4 +31,5 @@ class DataLoader:
         return LoadedDataset(
             data=data,
             metadata=metadata,
+            year=year
         )

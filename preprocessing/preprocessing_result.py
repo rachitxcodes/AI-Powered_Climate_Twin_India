@@ -19,3 +19,5 @@ class PreprocessingResult:
 
     validation: ValidationReport
 
+    year: int
+
