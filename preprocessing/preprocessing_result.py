@@ -3,21 +3,15 @@ import numpy as np
 
 from preprocessing.statistics_report import StatisticsReport
 from preprocessing.validation_report import ValidationReport
-
+from core.climate_dataset import ClimateDataset
 
 @dataclass(frozen=True, slots=True)
 class PreprocessingResult:
-    """
-    Stores the complete output of the preprocessing pipeline.
-    """
+
+    climate_dataset: ClimateDataset
 
     data: np.ndarray
 
-    metadata : dict
-    
     statistics: StatisticsReport
 
     validation: ValidationReport
-
-    year: int
-

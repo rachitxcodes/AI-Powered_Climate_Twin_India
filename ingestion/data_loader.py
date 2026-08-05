@@ -1,6 +1,7 @@
 from ingestion.dataset_registry import DatasetRegistry
 from ingestion.readers.ctl_parser import CTLParser
 from ingestion.loaded_dataset import LoadedDataset
+from core.climate_dataset_factory import ClimateDatasetFactory
 
 
 class DataLoader:
@@ -9,6 +10,7 @@ class DataLoader:
         self.registry = DatasetRegistry()
         self.parser = CTLParser()
         self._metadata_cache = {}
+        self.factory = ClimateDatasetFactory()
 
     def load(self, dataset: str, year: int):
 
@@ -27,9 +29,8 @@ class DataLoader:
         reader = config.reader()
         data = reader.read(grd_path, metadata)
 
-        # Return BOTH data and metadata
-        return LoadedDataset(
+        return self.factory.create(
             data=data,
             metadata=metadata,
-            year=year
+            year=year,
         )

@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import pandas as pd
-
+from core.climate_dataset import ClimateDataset
 from features.config import FeatureEngineeringConfig
-from features.generators.temporal_generator import TemporalGenerator
 from features.feature_engineering_result import FeatureEngineeringResult
+from features.generators.temporal_generator import TemporalGenerator
 
 
 class FeatureEngineeringPipeline:
@@ -16,35 +15,23 @@ class FeatureEngineeringPipeline:
         self.config = config
         self.temporal_generator = TemporalGenerator()
 
-    def run(self, preprocessing_result) -> FeatureEngineeringResult:
-        """
-        Execute the Feature Engineering pipeline.
-        """
+    def run(
+        self,
+        preprocessing_result,
+    ) -> FeatureEngineeringResult:
 
-        # Step 1: Extract data and year from preprocessing result
-        data = preprocessing_result.data
-        year = preprocessing_result.year
-        metadata = preprocessing_result.metadata
+        # Extract ClimateDataset from preprocessing
+        climate_dataset = preprocessing_result.climate_dataset
 
-        # Step 2: Create Date column
-        dates = pd.date_range(
-            start=f"{year}-01-01",
-            periods=len(data),
-            freq="D",
-        )
+        # Extract the underlying xarray.Dataset
+        dataset = climate_dataset.dataset
 
-        df = pd.DataFrame(
-            {
-                "Date": dates,
-                "Rainfall": data,
-            }
-        )
-
-        # Step 3: Generate Features
         generated_features: list[str] = []
 
+        # Generate temporal features
         if self.config.enable_temporal_features:
-            df = self.temporal_generator.generate(df)
+
+            dataset = self.temporal_generator.generate(dataset)
 
             generated_features.extend(
                 [
@@ -55,18 +42,10 @@ class FeatureEngineeringPipeline:
                 ]
             )
 
-        # Future
-        #
-        # if self.config.enable_lag_features:
-        #     ...
-        #
-        # if self.config.enable_rolling_features:
-        #     ...
-        #
-        # if self.config.enable_seasonal_features:
-        #     ...
+        # Wrap the engineered xarray.Dataset back into a ClimateDataset
+        engineered_climate_dataset = ClimateDataset(dataset)
 
         return FeatureEngineeringResult(
-            engineered_data=df,
+            climate_dataset=engineered_climate_dataset,
             generated_features=generated_features,
         )

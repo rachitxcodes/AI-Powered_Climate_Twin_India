@@ -4,18 +4,24 @@ from preprocessing.missing_value_handler import MissingValueHandler
 from preprocessing.missing_value_strategy import MissingValueStrategy
 from preprocessing.preprocessing_result import PreprocessingResult
 
+
 class PreprocessingPipeline:
+    """
+    Executes preprocessing on a ClimateDataset.
+    """
 
     def __init__(self):
-
         self._statistics = DatasetStatistics()
         self._validator = DatasetValidator()
         self._missing_handler = MissingValueHandler()
 
-    def run(self, loaded_dataset):
+    def run(self, climate_dataset) -> PreprocessingResult:
+        """
+        Run the preprocessing pipeline on a ClimateDataset.
+        """
 
-        # Extract the raw NumPy array
-        raw_data = loaded_dataset.data
+        # Extract rainfall data from the ClimateDataset
+        raw_data = climate_dataset.dataset["rainfall"].values
 
         # Compute statistics
         statistics = self._statistics.compute(raw_data)
@@ -30,9 +36,8 @@ class PreprocessingPipeline:
         )
 
         return PreprocessingResult(
+            climate_dataset=climate_dataset,
             data=processed,
-            metadata=loaded_dataset.metadata,
             statistics=statistics,
             validation=validation,
-            year=loaded_dataset.year
         )

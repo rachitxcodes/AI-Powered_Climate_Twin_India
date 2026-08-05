@@ -1,13 +1,11 @@
-from dataclasses import dataclass, field
-import pandas as pd
+from dataclasses import dataclass
+
+from core.climate_dataset import ClimateDataset
 
 
-@dataclass(slots=True)
+@dataclass(frozen=True, slots=True)
 class FeatureEngineeringResult:
-    """
-    Stores the output of the Feature Engineering pipeline.
-    """
 
-    engineered_data: pd.DataFrame
+    climate_dataset: ClimateDataset
 
-    generated_features: list[str] = field(default_factory=list)
+    generated_features: list[str]
