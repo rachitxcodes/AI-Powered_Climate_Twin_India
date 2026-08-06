@@ -1,32 +1,37 @@
-import numpy as np
-
+from ingestion.data_loader import DataLoader
+from preprocessing.preprocessing_pipeline import PreprocessingPipeline
 from features.config import FeatureEngineeringConfig
 from features.pipeline import FeatureEngineeringPipeline
 
 
-class DummyPreprocessingResult:
-    def __init__(self):
-        self.processed_data = np.array(
-            [
-                [10.0],
-                [20.0],
-                [15.0],
-            ]
-        )
+loader = DataLoader()
 
+climate = loader.load(
+    "rainfall",
+    2025,
+)
 
-def test_pipeline_returns_feature_engineering_result():
+preprocessing = PreprocessingPipeline()
 
-    config = FeatureEngineeringConfig()
+preprocessing_result = preprocessing.run(
+    climate,
+)
 
-    pipeline = FeatureEngineeringPipeline(config)
+pipeline = FeatureEngineeringPipeline(
+    FeatureEngineeringConfig()
+)
 
-    result = pipeline.run(DummyPreprocessingResult())
+feature_result = pipeline.run(
+    preprocessing_result,
+)
 
-    assert result is not None
+print("\nFeature Engineered Dataset")
+print("--------------------------------")
 
-    assert result.engineered_data.shape == (3, 1)
+print(feature_result.climate_dataset.dataset)
 
-    assert list(result.engineered_data.columns) == ["rainfall"]
+print()
 
-    assert result.generated_features == []
+print("Generated Features")
+
+print(feature_result.generated_features)

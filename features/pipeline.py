@@ -4,6 +4,7 @@ from core.climate_dataset import ClimateDataset
 from features.config import FeatureEngineeringConfig
 from features.feature_engineering_result import FeatureEngineeringResult
 from features.generators.temporal_generator import TemporalGenerator
+from features.generators.seasonal_generator import SeasonalGenerator
 
 
 class FeatureEngineeringPipeline:
@@ -14,6 +15,7 @@ class FeatureEngineeringPipeline:
     def __init__(self, config: FeatureEngineeringConfig):
         self.config = config
         self.temporal_generator = TemporalGenerator()
+        self.seasonal_generator = SeasonalGenerator()
 
     def run(
         self,
@@ -42,6 +44,17 @@ class FeatureEngineeringPipeline:
                 ]
             )
 
+        # Generate seasonal features
+        if self.config.enable_seasonal_features:
+
+            dataset = self.seasonal_generator.generate(dataset)
+
+            generated_features.extend(
+                [
+                    "season",
+                    "season_id",
+                ]
+            )
         # Wrap the engineered xarray.Dataset back into a ClimateDataset
         engineered_climate_dataset = ClimateDataset(dataset)
 
