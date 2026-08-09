@@ -6,6 +6,7 @@ from features.feature_engineering_result import FeatureEngineeringResult
 from features.generators.temporal_generator import TemporalGenerator
 from features.generators.seasonal_generator import SeasonalGenerator
 from features.generators.lag_generator import LagGenerator
+from features.generators.rolling_generator import RollingGenerator
 
 class FeatureEngineeringPipeline:
     """
@@ -16,6 +17,8 @@ class FeatureEngineeringPipeline:
         self.config = config
         self.temporal_generator = TemporalGenerator()
         self.seasonal_generator = SeasonalGenerator()
+        self.lag_generator = LagGenerator()
+        self.rolling_generator = RollingGenerator()
 
     def run(
         self,
@@ -59,9 +62,7 @@ class FeatureEngineeringPipeline:
         # Generate lag features
         if self.config.enable_lag_features:
 
-            lag_generator = LagGenerator()
-
-            dataset = lag_generator.generate(
+            dataset = self.lag_generator.generate(
                 dataset,
                 self.config.lag_days,
             )
@@ -73,6 +74,20 @@ class FeatureEngineeringPipeline:
                 ]
             )
 
+        # Generate rolling features
+        if self.config.enable_rolling_features:
+
+            dataset = self.rolling_generator.generate(
+                dataset,
+                self.config.rolling_windows,
+            )
+
+            generated_features.extend(
+                [
+                    f"rainfall_roll_mean_{window}"
+                    for window in self.config.rolling_windows
+                ]
+            )
         
         # Wrap the engineered xarray.Dataset back into a ClimateDataset
         engineered_climate_dataset = ClimateDataset(dataset)
