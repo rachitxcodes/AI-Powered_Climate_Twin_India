@@ -47,6 +47,20 @@ class FeatureEngineeringPipeline:
                 ]
             )
 
+        # Generate cyclical features
+        if self.config.enable_cyclical_features:
+
+            dataset = self.temporal_generator.generate_cyclical(dataset)
+
+            generated_features.extend(
+                [
+                    "month_sin",
+                    "month_cos",
+                    "day_of_year_sin",
+                    "day_of_year_cos",  
+                ]
+            )
+
         # Generate seasonal features
         if self.config.enable_seasonal_features:
 

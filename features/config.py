@@ -10,7 +10,9 @@ class FeatureEngineeringConfig:
     """
 
     enable_temporal_features: bool = True
+    enable_cyclical_features: bool = True
     enable_seasonal_features: bool = True
+    
 
     enable_lag_features: bool = True
     lag_days: tuple[int, ...] = (
