@@ -5,7 +5,7 @@ from features.config import FeatureEngineeringConfig
 from features.feature_engineering_result import FeatureEngineeringResult
 from features.generators.temporal_generator import TemporalGenerator
 from features.generators.seasonal_generator import SeasonalGenerator
-
+from features.generators.lag_generator import LagGenerator
 
 class FeatureEngineeringPipeline:
     """
@@ -55,6 +55,25 @@ class FeatureEngineeringPipeline:
                     "season_id",
                 ]
             )
+
+        # Generate lag features
+        if self.config.enable_lag_features:
+
+            lag_generator = LagGenerator()
+
+            dataset = lag_generator.generate(
+                dataset,
+                self.config.lag_days,
+            )
+
+            generated_features.extend(
+                [
+                    f"rainfall_lag_{lag}"
+                    for lag in self.config.lag_days
+                ]
+            )
+
+        
         # Wrap the engineered xarray.Dataset back into a ClimateDataset
         engineered_climate_dataset = ClimateDataset(dataset)
 

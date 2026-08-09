@@ -17,3 +17,11 @@ class FeatureEngineeringConfig:
     lag_days: list[int] = field(default_factory=lambda: [1, 7, 30])
 
     rolling_windows: list[int] = field(default_factory=lambda: [7, 30])
+    
+    enable_lag_features: bool = True
+
+    lag_days: tuple[int, ...] = (
+        1,
+        3,
+        7,
+    )
