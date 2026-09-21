@@ -162,3 +162,78 @@ def test_missing_variable_is_rejected():
             dataset,
             variable="lst",
         )
+
+def test_daily_aggregation_preserves_geolocation():
+    times = pd.to_datetime(
+        [
+            "2024-06-18 06:00",
+            "2024-06-18 06:30",
+        ]
+    )
+
+    dataset = xr.Dataset(
+        {
+            "lst": (
+                ("time", "y", "x"),
+                np.array(
+                    [
+                        [
+                            [300.0, 301.0],
+                            [302.0, 303.0],
+                        ],
+                        [
+                            [304.0, 305.0],
+                            [306.0, 307.0],
+                        ],
+                    ],
+                    dtype=np.float32,
+                ),
+            )
+        },
+        coords={
+            "time": times,
+            "y": [0, 1],
+            "x": [0, 1],
+            "latitude": (
+                ("y", "x"),
+                np.array(
+                    [
+                        [25.0, 25.0],
+                        [25.25, 25.25],
+                    ]
+                ),
+            ),
+            "longitude": (
+                ("y", "x"),
+                np.array(
+                    [
+                        [78.0, 78.25],
+                        [78.0, 78.25],
+                    ]
+                ),
+            ),
+        },
+    )
+
+    aggregator = TemporalAggregator()
+
+    result = aggregator.aggregate(
+        dataset,
+        variable="lst",
+    )
+
+    assert "latitude" in result.coords
+    assert "longitude" in result.coords
+
+    assert result["latitude"].dims == ("y", "x")
+    assert result["longitude"].dims == ("y", "x")
+
+    np.testing.assert_array_equal(
+        result["latitude"].values,
+        dataset["latitude"].values,
+    )
+
+    np.testing.assert_array_equal(
+        result["longitude"].values,
+        dataset["longitude"].values,
+    )

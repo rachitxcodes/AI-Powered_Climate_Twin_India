@@ -33,6 +33,12 @@ class TemporalAggregator:
             }
         )
 
+        # Preserve all non-temporal coordinates such as:
+        # latitude, longitude, y, and x.
+        for coord_name, coord in dataset.coords.items():
+            if "time" not in coord.dims:
+                result = result.assign_coords({coord_name: coord})
+                
         result[f"{variable}_mean"].attrs.update(data.attrs)
 
         result[f"{variable}_mean"].attrs["aggregation"] = "daily_mean"

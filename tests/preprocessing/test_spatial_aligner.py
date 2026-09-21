@@ -1,7 +1,11 @@
 import numpy as np
 import xarray as xr
+from pathlib import Path
 
+from ingestion.data_loader import DataLoader
+from ingestion.readers.insat_reader import INSATReader
 from preprocessing.alignment.spatial_aligner import SpatialAligner
+from preprocessing.temporal.temporal_aggregator import TemporalAggregator
 
 
 def test_nearest_spatial_alignment():
@@ -34,7 +38,6 @@ def test_nearest_spatial_alignment():
     )
 
     target_latitude = np.array([10.1, 11.8])
-
     target_longitude = np.array([20.1, 21.8])
 
     target = xr.Dataset(
@@ -61,11 +64,6 @@ def test_nearest_spatial_alignment():
         result["lst"].values,
         expected,
     )
-
-from pathlib import Path
-
-from ingestion.readers.insat_reader import INSATReader
-from ingestion.data_loader import DataLoader
 
 
 def test_real_insat_spatial_alignment():
@@ -153,9 +151,136 @@ def test_real_insat_spatial_alignment():
     assert np.nanmax(lst_values) <= 400
 
 
+def test_real_insat_daily_aggregation_then_spatial_alignment():
+    # --------------------------------------------------
+    # Locate the real INSAT sample
+    # --------------------------------------------------
+
+    insat_file = Path(
+        "tests/fixtures/3DIMG_18JUN2024_0600_L2B_LST_V01R00.h5"
+    )
+
+    assert insat_file.exists(), (
+        f"INSAT test file not found: {insat_file}"
+    )
+
+    # --------------------------------------------------
+    # Read real INSAT data
+    # --------------------------------------------------
+
+    insat_reader = INSATReader()
+    insat_dataset = insat_reader.read(insat_file)
+
+    # --------------------------------------------------
+    # Verify real INSAT geolocation
+    # --------------------------------------------------
+
+    assert "latitude" in insat_dataset.coords
+    assert "longitude" in insat_dataset.coords
+
+    # --------------------------------------------------
+    # Aggregate INSAT to daily resolution
+    # --------------------------------------------------
+
+    aggregator = TemporalAggregator()
+
+    daily_insat = aggregator.aggregate(
+        dataset=insat_dataset,
+        variable="lst",
+    )
+
+    # --------------------------------------------------
+    # Validate daily aggregation output
+    # --------------------------------------------------
+
+    assert "lst_mean" in daily_insat
+    assert "valid_observation_count" in daily_insat
+
+    assert "latitude" in daily_insat.coords
+    assert "longitude" in daily_insat.coords
+
+    assert daily_insat["lst_mean"].dims == (
+        "time",
+        "y",
+        "x",
+    )
+
+    assert daily_insat.sizes["time"] == 1
+
+    # --------------------------------------------------
+    # Load real IMD rainfall dataset
+    # --------------------------------------------------
+
+    loader = DataLoader()
+
+    imd_climate_dataset = loader.load(
+        dataset="rainfall",
+        year=2025,
+    )
+
+    imd_dataset = imd_climate_dataset.dataset
+
+    # --------------------------------------------------
+    # Spatially align daily INSAT to IMD grid
+    # --------------------------------------------------
+
+    aligner = SpatialAligner(method="nearest")
+
+    result = aligner.align(
+        source=daily_insat,
+        target=imd_dataset,
+        variable="lst_mean",
+    )
+
+    # --------------------------------------------------
+    # Validate aligned output
+    # --------------------------------------------------
+
+    assert "lst_mean" in result
+
+    assert result["lst_mean"].dims == (
+        "time",
+        "latitude",
+        "longitude",
+    )
+
+    assert result.sizes["time"] == 1
+
+    assert result.sizes["latitude"] == (
+        imd_dataset.sizes["latitude"]
+    )
+
+    assert result.sizes["longitude"] == (
+        imd_dataset.sizes["longitude"]
+    )
+
+    # --------------------------------------------------
+    # Validate target coordinates
+    # --------------------------------------------------
+
+    np.testing.assert_array_equal(
+        result["latitude"].values,
+        imd_dataset["latitude"].values,
+    )
+
+    np.testing.assert_array_equal(
+        result["longitude"].values,
+        imd_dataset["longitude"].values,
+    )
+
+    # --------------------------------------------------
+    # Validate LST values
+    # --------------------------------------------------
+
+    lst_values = result["lst_mean"].values
+
+    assert np.isfinite(lst_values).any()
+
+    assert np.nanmin(lst_values) >= 200
+    assert np.nanmax(lst_values) <= 400
+
 
 def test_spatial_mapping_can_be_reused():
-
     source_latitude = np.array([
         [10.0, 10.0, 10.0],
         [11.0, 11.0, 11.0],
