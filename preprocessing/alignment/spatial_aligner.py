@@ -86,6 +86,15 @@ class SpatialAligner:
                     time=time_index
                 ).values
 
+                # -------------------------------------------------
+                # pyresample uses NaN as the fill value.
+                # Integer arrays cannot store NaN, so convert
+                # integer/bool data to floating point first.
+                # -------------------------------------------------
+                values = self._prepare_values_for_resampling(
+                    values
+                )
+
                 aligned = kd_tree.get_sample_from_neighbour_info(
                     "nn",
                     target_shape,
@@ -116,10 +125,19 @@ class SpatialAligner:
 
         else:
 
+            values = source_data.values
+
+            # -----------------------------------------------------
+            # Same NaN compatibility handling for non-time data.
+            # -----------------------------------------------------
+            values = self._prepare_values_for_resampling(
+                values
+            )
+
             aligned_values = kd_tree.get_sample_from_neighbour_info(
                 "nn",
                 target_shape,
-                source_data.values,
+                values,
                 neighbour_info[0],
                 neighbour_info[1],
                 neighbour_info[2],
@@ -164,6 +182,30 @@ class SpatialAligner:
             variable=variable,
             mapping=mapping,
         )
+
+    @staticmethod
+    def _prepare_values_for_resampling(values):
+        """
+        Prepare source values for pyresample.
+
+        pyresample uses NaN as the fill value when a target
+        location has no valid source neighbour.
+
+        Integer and boolean arrays cannot represent NaN,
+        so they are converted to float32 before resampling.
+
+        Floating-point arrays are left unchanged.
+        """
+
+        values = np.asarray(values)
+
+        if np.issubdtype(values.dtype, np.integer):
+            return values.astype(np.float32)
+
+        if np.issubdtype(values.dtype, np.bool_):
+            return values.astype(np.float32)
+
+        return values
 
     @staticmethod
     def _create_target_grid(latitude, longitude):
