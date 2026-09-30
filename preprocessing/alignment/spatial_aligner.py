@@ -6,8 +6,19 @@ from pyresample import kd_tree
 
 
 class SpatialAligner:
+    """
+    Align a source dataset from its geographic grid/swath
+    onto a target latitude/longitude grid.
 
-    def __init__(self, method="nearest", radius_of_influence=50000):
+    The geographic mapping is built once and can then be
+    reused for multiple datasets having the same source grid.
+    """
+
+    def __init__(
+        self,
+        method="nearest",
+        radius_of_influence=50000,
+    ):
         if method != "nearest":
             raise ValueError(
                 "Only 'nearest' spatial alignment is supported."
@@ -21,8 +32,8 @@ class SpatialAligner:
         Build the geographic mapping from source pixels
         to target grid points.
 
-        The mapping can be reused for multiple source
-        datasets that share the same spatial grid.
+        Invalid source latitude/longitude pixels are excluded
+        from the mapping.
         """
 
         self._validate_source_coordinates(source)
@@ -39,15 +50,60 @@ class SpatialAligner:
             target_longitude,
         )
 
+        # ---------------------------------------------------------
+        # Validate target coordinates
+        # ---------------------------------------------------------
+
+        if not np.isfinite(target_latitude).all():
+            raise ValueError(
+                "Target latitude contains invalid values."
+            )
+
+        if not np.isfinite(target_longitude).all():
+            raise ValueError(
+                "Target longitude contains invalid values."
+            )
+
+        # ---------------------------------------------------------
+        # Handle invalid INSAT geolocation pixels
+        #
+        # Real INSAT swaths contain NaN latitude/longitude values
+        # outside the valid satellite observation area.
+        #
+        # pyresample should not be given those pixels as normal
+        # geographic coordinates.
+        # ---------------------------------------------------------
+
+        valid_source_mask = (
+            np.isfinite(source_latitude)
+            & np.isfinite(source_longitude)
+        )
+
+        if not np.any(valid_source_mask):
+            raise ValueError(
+                "Source dataset contains no valid geographic coordinates."
+            )
+
+        source_lats = source_latitude[valid_source_mask]
+        source_lons = source_longitude[valid_source_mask]
+
+        # ---------------------------------------------------------
+        # Build source and target geographic definitions
+        # ---------------------------------------------------------
+
         source_grid = geometry.SwathDefinition(
-            lons=source_longitude,
-            lats=source_latitude,
+            lons=source_lons,
+            lats=source_lats,
         )
 
         target_grid = geometry.SwathDefinition(
             lons=target_longitude,
             lats=target_latitude,
         )
+
+        # ---------------------------------------------------------
+        # Build nearest-neighbour mapping
+        # ---------------------------------------------------------
 
         neighbour_info = kd_tree.get_neighbour_info(
             source_grid,
@@ -61,39 +117,60 @@ class SpatialAligner:
         return {
             "neighbour_info": neighbour_info,
             "target_shape": target_latitude.shape,
+            "source_valid_mask": valid_source_mask,
         }
 
-    def apply_mapping(self, source, target, variable, mapping):
+    def apply_mapping(
+        self,
+        source,
+        target,
+        variable,
+        mapping,
+    ):
         """
-        Apply a previously calculated spatial mapping
-        to source data.
+        Apply a previously calculated geographic mapping
+        to a source variable.
         """
 
         self._validate_source(source, variable)
 
         neighbour_info = mapping["neighbour_info"]
         target_shape = mapping["target_shape"]
+        source_valid_mask = mapping["source_valid_mask"]
 
         source_data = source[variable]
+
+        # ---------------------------------------------------------
+        # The mapping was created using only valid geographic
+        # source pixels.
+        #
+        # Therefore every source variable must be reduced using
+        # exactly the same valid-pixel mask before resampling.
+        # ---------------------------------------------------------
+
+        if source_data.dims[-2:] != ("y", "x"):
+            if "time" not in source_data.dims:
+                raise ValueError(
+                    "Source variable must use ('y', 'x') spatial dimensions."
+                )
 
         if "time" in source_data.dims:
 
             aligned_values = []
 
-            for time_index in range(source_data.sizes["time"]):
+            for time_index in range(
+                source_data.sizes["time"]
+            ):
 
                 values = source_data.isel(
                     time=time_index
                 ).values
 
-                # -------------------------------------------------
-                # pyresample uses NaN as the fill value.
-                # Integer arrays cannot store NaN, so convert
-                # integer/bool data to floating point first.
-                # -------------------------------------------------
                 values = self._prepare_values_for_resampling(
                     values
                 )
+
+                values = values[source_valid_mask]
 
                 aligned = kd_tree.get_sample_from_neighbour_info(
                     "nn",
@@ -107,12 +184,18 @@ class SpatialAligner:
 
                 aligned_values.append(aligned)
 
-            aligned_values = np.stack(aligned_values)
+            aligned_values = np.stack(
+                aligned_values
+            )
 
             result = xr.Dataset(
                 {
                     variable: (
-                        ("time", "latitude", "longitude"),
+                        (
+                            "time",
+                            "latitude",
+                            "longitude",
+                        ),
                         aligned_values,
                     )
                 },
@@ -127,12 +210,11 @@ class SpatialAligner:
 
             values = source_data.values
 
-            # -----------------------------------------------------
-            # Same NaN compatibility handling for non-time data.
-            # -----------------------------------------------------
             values = self._prepare_values_for_resampling(
                 values
             )
+
+            values = values[source_valid_mask]
 
             aligned_values = kd_tree.get_sample_from_neighbour_info(
                 "nn",
@@ -147,7 +229,10 @@ class SpatialAligner:
             result = xr.Dataset(
                 {
                     variable: (
-                        ("latitude", "longitude"),
+                        (
+                            "latitude",
+                            "longitude",
+                        ),
                         aligned_values,
                     )
                 },
@@ -163,12 +248,15 @@ class SpatialAligner:
 
         return result
 
-    def align(self, source, target, variable):
+    def align(
+        self,
+        source,
+        target,
+        variable,
+    ):
         """
-        Convenience method.
-
-        Builds the spatial mapping and immediately
-        applies it.
+        Build the geographic mapping and immediately
+        apply it.
         """
 
         mapping = self.build_mapping(
@@ -186,31 +274,44 @@ class SpatialAligner:
     @staticmethod
     def _prepare_values_for_resampling(values):
         """
-        Prepare source values for pyresample.
-
-        pyresample uses NaN as the fill value when a target
-        location has no valid source neighbour.
-
-        Integer and boolean arrays cannot represent NaN,
-        so they are converted to float32 before resampling.
-
-        Floating-point arrays are left unchanged.
+        Convert integer/bool arrays to float32 because
+        spatial resampling may need NaN as a fill value.
         """
 
         values = np.asarray(values)
 
-        if np.issubdtype(values.dtype, np.integer):
-            return values.astype(np.float32)
+        if np.issubdtype(
+            values.dtype,
+            np.integer,
+        ):
+            return values.astype(
+                np.float32
+            )
 
-        if np.issubdtype(values.dtype, np.bool_):
-            return values.astype(np.float32)
+        if np.issubdtype(
+            values.dtype,
+            np.bool_,
+        ):
+            return values.astype(
+                np.float32
+            )
 
         return values
 
     @staticmethod
-    def _create_target_grid(latitude, longitude):
+    def _create_target_grid(
+        latitude,
+        longitude,
+    ):
+        """
+        Convert 1D target latitude/longitude coordinates
+        into a 2D geographic grid.
+        """
 
-        if latitude.ndim == 1 and longitude.ndim == 1:
+        if (
+            latitude.ndim == 1
+            and longitude.ndim == 1
+        ):
 
             latitude, longitude = np.meshgrid(
                 latitude,
@@ -218,13 +319,16 @@ class SpatialAligner:
                 indexing="ij",
             )
 
-        elif latitude.ndim == 2 and longitude.ndim == 2:
+        elif (
+            latitude.ndim == 2
+            and longitude.ndim == 2
+        ):
             pass
 
         else:
             raise ValueError(
-                "Target latitude and longitude must both be "
-                "1D or both be 2D."
+                "Target latitude and longitude must both "
+                "be 1D or both be 2D."
             )
 
         return latitude, longitude
@@ -232,7 +336,10 @@ class SpatialAligner:
     @staticmethod
     def _validate_source_coordinates(source):
 
-        if not isinstance(source, xr.Dataset):
+        if not isinstance(
+            source,
+            xr.Dataset,
+        ):
             raise TypeError(
                 "Source must be an xarray Dataset."
             )
@@ -257,10 +364,22 @@ class SpatialAligner:
                 "Source longitude must be 2D."
             )
 
+        if (
+            source["latitude"].shape
+            != source["longitude"].shape
+        ):
+            raise ValueError(
+                "Source latitude and longitude must "
+                "have the same shape."
+            )
+
     @staticmethod
     def _validate_target_coordinates(target):
 
-        if not isinstance(target, xr.Dataset):
+        if not isinstance(
+            target,
+            xr.Dataset,
+        ):
             raise TypeError(
                 "Target must be an xarray Dataset."
             )
@@ -275,12 +394,40 @@ class SpatialAligner:
                 "Target dataset must contain longitude."
             )
 
-    @staticmethod
-    def _validate_source(source, variable):
+        if target["latitude"].ndim not in (1, 2):
+            raise ValueError(
+                "Target latitude must be 1D or 2D."
+            )
 
-        SpatialAligner._validate_source_coordinates(source)
+        if target["longitude"].ndim not in (1, 2):
+            raise ValueError(
+                "Target longitude must be 1D or 2D."
+            )
+
+    @staticmethod
+    def _validate_source(
+        source,
+        variable,
+    ):
+
+        SpatialAligner._validate_source_coordinates(
+            source
+        )
 
         if variable not in source:
             raise ValueError(
-                f"Variable '{variable}' not found in source dataset."
+                f"Variable '{variable}' not found "
+                "in source dataset."
+            )
+
+        if "y" not in source[variable].dims:
+            raise ValueError(
+                f"Variable '{variable}' must contain "
+                "the 'y' spatial dimension."
+            )
+
+        if "x" not in source[variable].dims:
+            raise ValueError(
+                f"Variable '{variable}' must contain "
+                "the 'x' spatial dimension."
             )
