@@ -18,3 +18,8 @@ venv/
 *.pdf
 *.png
 
+# Versioned repository context
+!/AGENTS.md
+!/PROJECT_CONTEXT.md
+!/PROJECT_ROADMAP.md
+
